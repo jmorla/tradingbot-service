@@ -3,8 +3,11 @@ package com.jmorla.tradingboot.handlers;
 import com.jmorla.tradingboot.commands.*;
 import com.jmorla.tradingboot.model.Operation;
 import com.jmorla.tradingboot.model.Signal;
+import com.jmorla.tradingboot.model.Stock;
 import com.jmorla.tradingboot.service.WilliamsRStrategyService;
 import com.jmorla.tradingboot.service.StockWrService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.extensions.bots.commandbot.TelegramLongPollingCommandBot;
@@ -14,9 +17,12 @@ import org.telegram.telegrambots.meta.bots.AbsSender;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 public class StocksSignalsHandler extends TelegramLongPollingCommandBot {
+
+    private static Logger log = LoggerFactory.getLogger(StocksSignalsHandler.class);
 
     @Value("${bot.name}")
     private String botUsername;
@@ -26,11 +32,18 @@ public class StocksSignalsHandler extends TelegramLongPollingCommandBot {
 
     private String botChatId = "-739175427";
 
-    private static final Set<String> availableSymbols = new HashSet<>();
+    private static Set<String> availableSymbols;
 
     private final WilliamsRStrategyService williamsRStrategyService;
 
     public StocksSignalsHandler(StockWrService stockWrDatabase) {
+        availableSymbols = stockWrDatabase.getAll()
+                .stream()
+                .map(Stock::getSymbol)
+                .collect(Collectors.toSet());
+
+        log.info("Start watching symbols: {}", availableSymbols);
+
         register(new StockAddCommand(botChatId, stockWrDatabase));
         register(new StockRemoveCommand(botChatId, stockWrDatabase));
         register(new StockWatchListCommand(botChatId, stockWrDatabase));
@@ -43,6 +56,8 @@ public class StocksSignalsHandler extends TelegramLongPollingCommandBot {
         availableSymbols.stream()
                 .forEach(symbol -> williamsRStrategyService
                         .onMarketClose(symbol, (signal) -> sendSignalMessage(signal)));
+
+        log.info("Handler initialized successfully");
     }
 
 
